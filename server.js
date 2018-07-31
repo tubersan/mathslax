@@ -2,7 +2,6 @@
 const express = require('express');
 const bodyparser = require('body-parser');
 const pug = require('pug');
-// const util = require('util');
 const entities = require('entities');
 
 const log = require('./lib/log');
@@ -11,22 +10,25 @@ const typeset = require('./lib/typeset.js');
 const SERVER = process.env.SERVER || '127.0.0.1';
 const PORT = process.env.PORT || '8080';
 const SLACK_AUTH_TOKEN = process.env.SLACK_AUTH_TOKEN || 'none';
+const PUBLIC_URL = process.env.PUBLIC_URL || `http://${SERVER}:${PORT}/`
+if (PUBLIC_URL.substr(-1, 1) !== '/') {
+  PUBLIC_URL += '/';
+}
 
 // Install the routes.
 const router = express.Router();
 
 router.post('/typeset', function(req, res) {
 
-  if (req.body.token !== SLACK_AUTH_TOKEN)
-  {
-    log.warn('Unrecongized or no token:',req.body.token);
+  if (req.body.token !== SLACK_AUTH_TOKEN) {
+    log.warn('Unrecongized or no token:', req.body.token);
     res.status(401).send();
     return;
   }
 
   var requestString = entities.decode(req.body.text);
 
-  log.info('Request:',requestString);
+  log.info('Request:', requestString);
 
   var typesetPromise = typeset.typeset(requestString, 'math!');
 
@@ -37,8 +39,10 @@ router.post('/typeset', function(req, res) {
   }
 
   var promiseSuccess = function(mathObjects) {
-    var locals = {'mathObjects': mathObjects,
-      'serverAddress': `http://${SERVER}:${PORT}/` };
+    var locals = {
+      'mathObjects': mathObjects,
+      'serverAddress': PUBLIC_URL
+    };
     var htmlResult = pug.renderFile('./views/slack-response.pug', locals);
     res.json({'text' : htmlResult});
     res.end();
@@ -56,9 +60,8 @@ router.post('/typeset', function(req, res) {
 
 router.post('/slashtypeset', function(req, res) {
 
-  if (req.body.token !== SLACK_AUTH_TOKEN)
-  {
-    log.warn('Unrecongized or no token:',req.body.token);
+  if (req.body.token !== SLACK_AUTH_TOKEN) {
+    log.warn('Unrecongized or no token:', req.body.token);
     res.status(401).send();
     return;
   }
@@ -74,18 +77,13 @@ router.post('/slashtypeset', function(req, res) {
   }
 
   var promiseSuccess = function(mathObjects) {
-    //var locals = {'mathObjects': mathObjects,
-    //             'serverAddress': SERVER!='127.0.0.1' ?
-    //             util.format('http://%s:%s/', SERVER, PORT) :
-    //             'http://'+req.headers.host+'/' };
     res.json({
       response_type: 'in_channel',
       text: requestString,
       attachments: [
         {
           fallback: requestString,
-          image_url: 'http://' + SERVER + ':' + PORT + '/'
-            + mathObjects[0].output
+          image_url: PUBLIC_URL + mathObjects[0].output
         },
       ],
     });
@@ -118,9 +116,9 @@ app.use('/static', express.static('static'));
 app.use('/', router);
 
 app.listen(PORT);
-log.info(`Mathslax is listening at http://${SERVER}:${PORT}/`);
+log.info(`Mathslax is listening at http://${SERVER}:${PORT}/, using public address ${PUBLIC_URL}`);
 log.info('Make a test request with something like:');
-log.info(`curl -v -X POST ${SERVER}:${PORT}/typeset --data ` +
-            '\'{"text": "f(x) = E_0\\frac{x^2}{sin(x)}", "token": "none"}\' ' +
+log.info(`curl -v -X POST ${PUBLIC_URL}typeset --data ` +
+            '\'{"text": "math! f(x) = E_0\\\\frac{x^2}{sin(x)}", "token": "none"}\' ' +
             '-H "Content-Type: application/json"');
 log.info('****************************************');
